@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Routes, Route } from 'react-router-dom';
 import { TaskCard } from './TaskCard';
 import { TaskForm } from './TaskForm';
 import { Modal } from './Modal';
@@ -12,13 +12,28 @@ import * as db from '../utils/db';
 
 export const TaskBoard = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showPastTasks, setShowPastTasks] = useState(false);
+  const [showYesterdayTasks, setShowYesterdayTasks] = useState(false);
   const [completedTasksToday, setCompletedTasksToday] = useState(0);
   const [streak, setStreak] = useState(0);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024); // Default to open on larger screens
   const location = useLocation();
+
+  // Effect to handle sidebar open/close based on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setIsSidebarOpen(true); // Always open on large screens
+      } else {
+        setIsSidebarOpen(false); // Close on small screens initially
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Helper function to get the start of the day (midnight) for a date
   const getStartOfDay = (date: Date) => {
@@ -156,7 +171,7 @@ export const TaskBoard = () => {
       setError('Failed to add task. Please try again.');
     }
 
-    setIsModalOpen(false);
+    setShowModal(false);
   };
 
   const handleStatusChange = async (id: string, newStatus: TaskStatus, startTime?: string, endTime?: string) => {
@@ -248,7 +263,7 @@ export const TaskBoard = () => {
     }
 
     const tasksToDisplay = tasks.filter(task => {
-      if (showPastTasks) {
+      if (showYesterdayTasks) {
         return isToday(task.createdAt) || isYesterday(task.createdAt);
       }
       return isToday(task.createdAt);
@@ -311,95 +326,118 @@ export const TaskBoard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7]">
-      <div className="flex">
-        <Sidebar />
-        <div className="flex-1 ml-64">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-12">
-              <h1 className="text-4xl font-semibold text-gray-800 tracking-tight">
-                Task Manager
-              </h1>
-              <div className="flex items-center gap-4">
-                {location.pathname === '/' && (
-                  <div className="glass rounded-full px-5 py-2 flex items-center gap-4 text-gray-700 text-sm font-medium shadow-md">
-                    <span>✅ Tasks Done Today: {completedTasksToday} / {tasks.filter(t => isToday(t.createdAt)).length}</span>
-                    <span>🔥 Streak: {streak} Days Active</span>
-                  </div>
-                )}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 lg:flex">
+      {/* Mobile menu button */}
+      <button
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        className="fixed top-4 left-4 z-50 p-2 rounded-lg bg-white shadow-lg lg:hidden"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
 
-                {location.pathname === '/' && (
-                  <button
-                    onClick={() => setShowPastTasks(!showPastTasks)}
-                    className="
-                      inline-flex items-center
-                      px-5 py-2.5
-                      rounded-md
-                      text-[15px] font-medium
-                      text-gray-700
-                      bg-gray-100
-                      border border-gray-300
-                      hover:bg-gray-200
-                      transition-all
-                      duration-300
-                      ease-in-out
-                      hover:shadow-sm
-                      hover:scale-[1.01]
-                      focus:outline-none
-                      focus:ring-2 focus:ring-gray-300
-                    "
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 mr-2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {showPastTasks ? "Hide Yesterday's Tasks" : "Show Yesterday's Tasks"}
-                  </button>
-                )}
+      {/* Sidebar */}
+      <Sidebar 
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        completedTasksToday={completedTasksToday}
+        streak={streak}
+      />
+
+      {/* Main content */}
+      <div className={`
+        transition-all duration-300 ease-in-out
+        ${isSidebarOpen && window.innerWidth < 1024 ? 'ml-64' : 'ml-0'} /* Apply ml-64 only on mobile when sidebar is open */
+        flex-1 /* Take remaining space in flex container */
+      `}>
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex justify-between items-center mb-12">
+            <h1 className="text-4xl font-semibold text-gray-800 tracking-tight">
+              {location.pathname === '/' ? 'Dashboard' :
+               location.pathname === '/calendar' ? 'Calendar' :
+               location.pathname === '/completed' ? 'Completed Tasks' :
+               'Insights'}
+            </h1>
+            {location.pathname === '/' && (
+              <div className="flex items-center gap-4">
+                <div className="glass rounded-full px-5 py-2 flex items-center gap-4 text-gray-700 text-sm font-medium shadow-md">
+                  <span>✅ Tasks Done Today: {completedTasksToday} / {tasks.filter(t => isToday(t.createdAt)).length}</span>
+                  <span>🔥 Streak: {streak} Days Active</span>
+                </div>
                 <button
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={() => setShowYesterdayTasks(!showYesterdayTasks)}
                   className="
                     inline-flex items-center
-                    px-5 py-2.5
+                    px-4 py-2
                     rounded-lg
-                    bg-gradient-to-r from-blue-500 to-indigo-500
-                    text-white text-[15px] font-medium
-                    shadow-lg
-                    hover:shadow-md
-                    hover:scale-[1.01]
-                    transform
-                    transition-all
-                    duration-300
-                    ease-in-out
-                    focus:outline-none
-                    focus:ring-2
-                    focus:ring-blue-500
+                    bg-white
+                    text-gray-700
+                    hover:bg-gray-50
+                    transition-colors
+                    duration-200
+                    shadow-sm
+                    border border-gray-200
                   "
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 mr-2"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-                      clipRule="evenodd"
-                    />
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {showYesterdayTasks ? "Hide Yesterday's Tasks" : "Show Yesterday's Tasks"}
+                </button>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="
+                    inline-flex items-center
+                    px-4 py-2
+                    rounded-lg
+                    bg-blue-600
+                    text-white
+                    hover:bg-blue-700
+                    transition-colors
+                    duration-200
+                    shadow-sm
+                  "
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
                   Add New Task
                 </button>
               </div>
-            </div>
-
-            {renderContent()}
-
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add New Task">
-              <TaskForm onSubmit={addTask} onClose={() => setIsModalOpen(false)} />
-            </Modal>
+            )}
           </div>
+
+          <Routes>
+            <Route path="/" element={
+              <div className="space-y-6">
+                {renderContent()}
+              </div>
+            } />
+            <Route path="/calendar" element={
+              <CalendarView 
+                tasks={tasks}
+                onStatusChange={handleStatusChange}
+                onDelete={deleteTask}
+                onPriorityChange={handlePriorityChange}
+              />
+            } />
+            <Route path="/completed" element={
+              <CompletedView 
+                tasks={tasks.filter(task => task.status === 'Done')}
+                onDelete={deleteTask}
+              />
+            } />
+            <Route path="/insights" element={
+              <InsightsView tasks={tasks} />
+            } />
+          </Routes>
         </div>
       </div>
+
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Add New Task">
+        <TaskForm onSubmit={addTask} onClose={() => setShowModal(false)} />
+      </Modal>
     </div>
   );
 }; 

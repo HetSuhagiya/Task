@@ -131,7 +131,8 @@ export const TaskCard = ({ task, onStatusChange, onDelete, onPriorityChange }: T
         ${statusColors[task.status].bg}
         ${statusColors[task.status].text}
         px-3 py-1
-        rounded-tr-xl
+        rounded-md
+        border border-gray-200
         text-xs
         font-medium
         flex items-center gap-1
